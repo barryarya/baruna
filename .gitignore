@@ -23,7 +23,8 @@ dist-ssr
 
 # Generated browser-test artifacts
 screenshots/
-dokumen/
+# Large binary presentations (>100MB exceeds GitHub limits)
+dokumen/*.pptx
 
 # Wrangler / Cloudflare
 .wrangler/
