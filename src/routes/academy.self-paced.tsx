@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   BookOpen,
@@ -16,8 +17,54 @@ import { AcademyShell } from "@/components/baruna/academy/AcademyShell";
 import { programsByType, type Program } from "@/data/programs";
 import { MINUTES_PER_JP, masterByCode } from "@/data/masterModules";
 import { useShortCourses } from "@/lib/shortCourses";
+import { supabase } from "@/integrations/supabase/client";
+import defaultCover from "@/assets/self-paced/m01.jpg";
 
 export const Route = createFileRoute("/academy/self-paced")({
+  loader: async () => {
+    const { data: dbModules } = await supabase
+      .from("module_registry")
+      .select("id, title, summary, language, estimated_learning_hours, current_status, created_at, author_expert_id")
+      .eq("current_status", "published")
+      .order("created_at", { ascending: false });
+
+    const expertIds = Array.from(
+      new Set((dbModules ?? []).map((m) => m.author_expert_id).filter(Boolean)),
+    ) as string[];
+    let expertMap: Record<string, string> = {};
+    if (expertIds.length > 0) {
+      const { data: expList } = await supabase
+        .from("experts_directory_v")
+        .select("id, display_name")
+        .in("id", expertIds);
+      if (expList && expList.length > 0) {
+        expertMap = Object.fromEntries(expList.map((e) => [e.id, e.display_name]));
+      } else {
+        const { data: rawList } = await supabase
+          .from("experts")
+          .select("id, display_name")
+          .in("id", expertIds);
+        if (rawList && rawList.length > 0) {
+          expertMap = Object.fromEntries(rawList.map((e) => [e.id, e.display_name]));
+        }
+      }
+
+      // Fallback check in profiles if id is user_id
+      if (Object.keys(expertMap).length === 0) {
+        const { data: profList } = await supabase
+          .from("profiles")
+          .select("id, display_name")
+          .in("id", expertIds);
+        if (profList) {
+          for (const p of profList) {
+            if (p.display_name) expertMap[p.id] = p.display_name;
+          }
+        }
+      }
+    }
+
+    return { dbModules: dbModules ?? [], expertMap };
+  },
   head: () => ({
     meta: [
       { title: "Self-Paced Courses — Standalone Learning Modules — BARUNA Academy" },
@@ -47,8 +94,40 @@ function masterCodeFor(p: Program): string | undefined {
 }
 
 function SelfPacedIndex() {
-  const catalog = programsByType("self-paced");
+  const { dbModules, expertMap } = Route.useLoaderData();
+  const staticCatalog = programsByType("self-paced");
   const { isCompleted, get } = useShortCourses();
+
+  const dynamicPrograms: Program[] = useMemo(() => {
+    return (dbModules ?? []).map((m) => {
+      const author = m.author_expert_id ? expertMap[m.author_expert_id] : "BARUNA Trainer";
+      return {
+        id: m.id,
+        type: "self-paced" as const,
+        title: m.title,
+        description: m.summary || "Approved BARUNA self-paced learning module.",
+        image: defaultCover,
+        category: "Fisheries Management",
+        level: "Intermediate" as const,
+        language: m.language || "English",
+        duration: `${m.estimated_learning_hours || 2} Hours`,
+        instructor: author ? `${author} (BARUNA Trainer)` : "BARUNA Trainer",
+        organization: "BARUNA Academy",
+        country: "Indonesia",
+        startDate: new Date(m.created_at).toISOString().split("T")[0],
+        participants: 1,
+        rating: 5.0,
+        reviews: 1,
+        status: "ONLINE",
+        keywords: ["self-paced", "module", m.title.toLowerCase()],
+        href: `/academy/self-paced/${m.id}`,
+      };
+    });
+  }, [dbModules, expertMap]);
+
+  const catalog = useMemo(() => {
+    return [...dynamicPrograms, ...staticCatalog];
+  }, [dynamicPrograms, staticCatalog]);
 
   const enrichedCount = catalog.reduce(
     (acc, p) => {

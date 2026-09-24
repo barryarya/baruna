@@ -1,7 +1,7 @@
 import { Link, Outlet, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ClipboardCheck, ShieldCheck, UserCheck, Users } from "lucide-react";
+import { BookOpen, ClipboardCheck, ShieldCheck, UserCheck, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { getAdminAccess } from "@/lib/admin/users.functions";
@@ -86,6 +86,13 @@ function AdminShell() {
               activeProps={{ className: "bg-navy text-white hover:bg-navy" }}
             >
               <UserCheck className="h-4 w-4" /> Verifikasi Expert
+            </Link>
+            <Link
+              to="/admin/modules"
+              className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 font-semibold hover:bg-muted"
+              activeProps={{ className: "bg-navy text-white hover:bg-navy" }}
+            >
+              <BookOpen className="h-4 w-4" /> Verifikasi Modul
             </Link>
             <Link
               to="/governance/subjects"

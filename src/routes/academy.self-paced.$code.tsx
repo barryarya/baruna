@@ -43,6 +43,9 @@ import {
 } from "@/lib/shortCourses";
 import { barunaToast } from "@/lib/downloads";
 
+import { supabase } from "@/integrations/supabase/client";
+import defaultCover from "@/assets/self-paced/m01.jpg";
+
 type LoaderData =
   | { kind: "master"; master: NonNullable<ReturnType<typeof lookupMaster>>; lms: LmsModule | undefined }
   | { kind: "program"; program: Program };
@@ -55,11 +58,67 @@ function lookupLms(lmsId: string) {
 }
 
 export const Route = createFileRoute("/academy/self-paced/$code")({
-  loader: ({ params }): LoaderData => {
+  loader: async ({ params }): Promise<LoaderData> => {
     const master = lookupMaster(params.code);
     if (master) return { kind: "master", master, lms: lookupLms(master.lmsId) };
     const program = programs.find((p) => p.id === params.code && p.type === "self-paced");
     if (program) return { kind: "program", program };
+
+    // Dynamic module lookup from module_registry
+    const { data: mod } = await supabase
+      .from("module_registry")
+      .select("*")
+      .eq("id", params.code)
+      .maybeSingle();
+
+    if (mod) {
+      let expName = "BARUNA Trainer";
+      if (mod.author_expert_id) {
+        const { data: exp } = await supabase
+          .from("experts_directory_v")
+          .select("display_name")
+          .eq("id", mod.author_expert_id)
+          .maybeSingle();
+        if (exp?.display_name) {
+          expName = exp.display_name;
+        } else {
+          const { data: rawExp } = await supabase
+            .from("experts")
+            .select("display_name")
+            .eq("id", mod.author_expert_id)
+            .maybeSingle();
+          if (rawExp?.display_name) {
+            expName = rawExp.display_name;
+          }
+        }
+      }
+
+      return {
+        kind: "program",
+        program: {
+          id: mod.id,
+          type: "self-paced",
+          title: mod.title,
+          description: mod.summary || "Approved BARUNA self-paced course.",
+          image: defaultCover,
+          category: "Fisheries Management",
+          level: "Intermediate",
+          language: mod.language || "English",
+          duration: `${mod.estimated_learning_hours || 2} Hours`,
+          instructor: `${expName} (BARUNA Trainer)`,
+          organization: "BARUNA Academy",
+          country: "Indonesia",
+          startDate: new Date(mod.created_at).toISOString().split("T")[0],
+          participants: 1,
+          rating: 5.0,
+          reviews: 1,
+          status: "ONLINE",
+          keywords: ["self-paced", "module"],
+          href: `/academy/self-paced/${mod.id}`,
+        },
+      };
+    }
+
     throw notFound();
   },
   head: ({ loaderData }) => {

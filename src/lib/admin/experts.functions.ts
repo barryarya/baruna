@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { publishApprovedExpert } from "@/lib/experts/publishing.server";
 import type { ExpertApplicationDocument, ExpertDraftPayload } from "@/lib/experts/application.types";
 
 const DecisionType = z.enum(["approve", "return_for_revision", "reject"]);
@@ -25,6 +26,8 @@ export type AdminExpertItem = {
   createdAt: string;
   updatedAt: string;
   documentsCount: number;
+  publishedSlug?: string | null;
+  isPublished?: boolean;
 };
 
 export type AdminExpertDetail = AdminExpertItem & {
@@ -112,10 +115,28 @@ export const listAdminExpertApplications = createServerFn({ method: "GET" })
       }
     });
 
+    // Fetch published experts in directory
+    const { data: publishedExperts } = await supabaseAdmin
+      .from("experts")
+      .select("id, slug, source_submission_id, current_status")
+      .in("source_submission_id", subjectIds);
+
+    const expertMap = new Map<string, { id: string; slug: string; current_status: string }>();
+    (publishedExperts ?? []).forEach((e) => {
+      if (e.source_submission_id) {
+        expertMap.set(e.source_submission_id, {
+          id: e.id,
+          slug: e.slug,
+          current_status: e.current_status,
+        });
+      }
+    });
+
     const items: AdminExpertItem[] = subjects.map((subj) => {
       const draft = draftMap.get(subj.id);
       const payload = draft?.payload;
       const rawPayload = (payload ?? {}) as Record<string, unknown>;
+      const published = expertMap.get(subj.id);
 
       const applicantName =
         (typeof rawPayload.fullName === "string" && rawPayload.fullName) ||
@@ -147,6 +168,8 @@ export const listAdminExpertApplications = createServerFn({ method: "GET" })
         createdAt: subj.created_at,
         updatedAt: subj.updated_at,
         documentsCount,
+        publishedSlug: published?.slug ?? null,
+        isPublished: published?.current_status === "published",
       };
     });
 
@@ -223,6 +246,13 @@ export const getAdminExpertDetail = createServerFn({ method: "GET" })
 
     const rawPayload = (payload ?? {}) as Record<string, unknown>;
 
+    // Fetch published expert record
+    const { data: publishedExpert } = await supabaseAdmin
+      .from("experts")
+      .select("id, slug, current_status")
+      .eq("source_submission_id", subj.id)
+      .maybeSingle();
+
     return {
       subjectId: subj.id,
       draftId: draft?.id ?? null,
@@ -250,6 +280,8 @@ export const getAdminExpertDetail = createServerFn({ method: "GET" })
       updatedAt: subj.updated_at,
       documentsCount: documentsWithUrls.length,
       documents: documentsWithUrls,
+      publishedSlug: publishedExpert?.slug ?? null,
+      isPublished: publishedExpert?.current_status === "published",
       decisionsHistory: (decisions ?? []).map((d) => ({
         id: d.id,
         decision: d.decision,
@@ -277,8 +309,6 @@ export const recordAdminExpertDecision = createServerFn({ method: "POST" })
     }
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const adminAny = supabaseAdmin as any;
 
     if (input.decision === "return_for_revision") {
       const { data: decId, error } = await supabaseAdmin.rpc("return_for_revision", {
@@ -299,29 +329,34 @@ export const recordAdminExpertDecision = createServerFn({ method: "POST" })
 
     if (input.decision === "approve") {
       try {
-        // Publish to public experts directory
-        await adminAny.rpc("expert_publish_from_decision", {
-          _subject_id: input.subjectId,
-          _decision_id: decId,
+        await publishApprovedExpert({
+          subjectId: input.subjectId,
+          decisionId: decId,
+          decidedBy: context.userId,
         });
-
-        // Grant expert RBAC role to applicant
-        const { data: sub } = await supabaseAdmin
-          .from("review_subjects")
-          .select("submitted_by")
-          .eq("id", input.subjectId)
-          .single();
-
-        if (sub?.submitted_by) {
-          await adminAny.rpc("assign_rbac_role", {
-            _target_user_id: sub.submitted_by,
-            _role_code: "expert",
-          });
-        }
       } catch (publishErr) {
         console.error("[recordAdminExpertDecision] post-decision error:", publishErr);
+        throw new Error(
+          publishErr instanceof Error
+            ? `Keputusan disetujui namun gagal mempublikasikan profil: ${publishErr.message}`
+            : "Gagal mempublikasikan profil expert ke direktori.",
+        );
       }
     }
 
     return { success: true, decisionId: decId, decision: input.decision };
+  });
+
+export const syncExpertToDirectory = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) => z.object({ subjectId: z.string().uuid() }).parse(input))
+  .handler(async ({ data: input, context }) => {
+    if (!(await assertAdminOrReviewer(context))) {
+      throw new Error("forbidden");
+    }
+    const result = await publishApprovedExpert({
+      subjectId: input.subjectId,
+      decidedBy: context.userId,
+    });
+    return { success: true, ...result };
   });

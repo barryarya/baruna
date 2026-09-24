@@ -9,6 +9,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { requirePermission } from "@/lib/auth/permissions.server";
+import { publishApprovedExpert, publishApprovedModule } from "@/lib/experts/publishing.server";
 
 const AppRole = z.enum(["admin", "management", "qa_reviewer"]);
 const Recommendation = z.enum(["approve", "reject", "request_changes"]);
@@ -325,20 +326,16 @@ export const recordFinalDecision = createServerFn({ method: "POST" })
         const clientAny = context.supabase as any;
 
         if (sub?.kind === "expert") {
-          await clientAny.rpc("expert_publish_from_decision", {
-            _subject_id: data.subjectId,
-            _decision_id: id,
+          await publishApprovedExpert({
+            subjectId: data.subjectId,
+            decisionId: id,
+            decidedBy: context.userId,
           });
-          if (sub.submitted_by) {
-            await clientAny.rpc("assign_rbac_role", {
-              _target_user_id: sub.submitted_by,
-              _role_code: "expert",
-            });
-          }
         } else if (sub?.kind === "module") {
-          await clientAny.rpc("module_publish_from_decision", {
-            _subject_id: data.subjectId,
-            _decision_id: id,
+          await publishApprovedModule({
+            subjectId: data.subjectId,
+            decisionId: id,
+            decidedBy: context.userId,
           });
         }
       } catch (publishErr) {

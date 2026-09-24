@@ -376,7 +376,21 @@ function AdminExpertsPage() {
                       {formatDate(item.createdAt)}
                     </td>
 
-                    <td className="px-6 py-4">{getStatusBadge(item.status)}</td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col gap-1 items-start">
+                        {getStatusBadge(item.status)}
+                        {item.publishedSlug && (
+                          <a
+                            href={`/experts/${item.publishedSlug}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-marine hover:underline mt-0.5"
+                          >
+                            <ExternalLink className="h-3 w-3" /> Tayang di Direktori
+                          </a>
+                        )}
+                      </div>
+                    </td>
 
                     <td className="px-6 py-4 text-right">
                       <Button
@@ -506,7 +520,28 @@ function ExpertDetailModal({
             <p className="mt-2">Mengambil berkas dan kelengkapan kandidat...</p>
           </div>
         ) : (
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-2">
+          <>
+            {detail?.status === "approved" && (
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-xs text-emerald-900">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                  <span>
+                    <strong>Pengajuan Disetujui:</strong> Profil expert ini telah aktif dan dipublikasikan ke sistem.
+                  </span>
+                </div>
+                {detail.publishedSlug && (
+                  <a
+                    href={`/experts/${detail.publishedSlug}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1 font-semibold text-white hover:bg-emerald-700 transition"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" /> Buka Profil Publik
+                  </a>
+                )}
+              </div>
+            )}
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-3">
             <TabsList className="grid grid-cols-4 bg-slate-100">
               <TabsTrigger value="profile">Biodata Diri</TabsTrigger>
               <TabsTrigger value="expertise">Keahlian & Karir</TabsTrigger>
@@ -824,13 +859,17 @@ function ExpertDetailModal({
                       onClick={() => handleDecision("approve")}
                       className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold flex items-center gap-1.5 shadow-sm"
                     >
-                      <CheckCircle2 className="h-4 w-4" /> Setujui & Publikasikan Expert
+                      <CheckCircle2 className="h-4 w-4" />
+                      {detail?.status === "approved"
+                        ? "Sinkronkan / Perbarui Publikasi"
+                        : "Setujui & Publikasikan Expert"}
                     </Button>
                   </div>
                 </div>
               </div>
             </TabsContent>
           </Tabs>
+          </>
         )}
       </DialogContent>
     </Dialog>

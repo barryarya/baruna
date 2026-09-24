@@ -40,3 +40,7 @@ dokumen/*.pptx
 *.njsproj
 *.sln
 *.sw?
+
+# Supabase CLI internal cache & scratch dumps
+supabase/.temp/
+supabase/combined_migrations.sql

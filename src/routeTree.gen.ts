@@ -45,6 +45,7 @@ import { Route as AcademyWorkshopRouteImport } from './routes/academy.workshop'
 import { Route as AccountProfileRouteImport } from './routes/account.profile'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminExpertsRouteImport } from './routes/admin.experts'
+import { Route as AdminModulesRouteImport } from './routes/admin.modules'
 import { Route as AdminUsersRouteImport } from './routes/admin.users'
 import { Route as EventsIndexRouteImport } from './routes/events.index'
 import { Route as EventsSlugRouteImport } from './routes/events.$slug'
@@ -298,6 +299,11 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
 const AdminExpertsRoute = AdminExpertsRouteImport.update({
   id: '/experts',
   path: '/experts',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminModulesRoute = AdminModulesRouteImport.update({
+  id: '/modules',
+  path: '/modules',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminUsersRoute = AdminUsersRouteImport.update({
@@ -724,6 +730,7 @@ export interface FileRoutesByFullPath {
   '/academy/workshop': typeof AcademyWorkshopRoute
   '/account/profile': typeof AccountProfileRoute
   '/admin/experts': typeof AdminExpertsRoute
+  '/admin/modules': typeof AdminModulesRoute
   '/admin/users': typeof AdminUsersRoute
   '/events/$slug': typeof EventsSlugRoute
   '/events/all': typeof EventsAllRoute
@@ -829,6 +836,7 @@ export interface FileRoutesByTo {
   '/academy/workshop': typeof AcademyWorkshopRoute
   '/account/profile': typeof AccountProfileRoute
   '/admin/experts': typeof AdminExpertsRoute
+  '/admin/modules': typeof AdminModulesRoute
   '/admin/users': typeof AdminUsersRoute
   '/events/$slug': typeof EventsSlugRoute
   '/events/all': typeof EventsAllRoute
@@ -941,6 +949,7 @@ export interface FileRoutesById {
   '/academy/workshop': typeof AcademyWorkshopRoute
   '/account/profile': typeof AccountProfileRoute
   '/admin/experts': typeof AdminExpertsRoute
+  '/admin/modules': typeof AdminModulesRoute
   '/admin/users': typeof AdminUsersRoute
   '/events/$slug': typeof EventsSlugRoute
   '/events/all': typeof EventsAllRoute
@@ -1055,6 +1064,7 @@ export interface FileRouteTypes {
     | '/academy/workshop'
     | '/account/profile'
     | '/admin/experts'
+    | '/admin/modules'
     | '/admin/users'
     | '/events/$slug'
     | '/events/all'
@@ -1160,6 +1170,7 @@ export interface FileRouteTypes {
     | '/academy/workshop'
     | '/account/profile'
     | '/admin/experts'
+    | '/admin/modules'
     | '/admin/users'
     | '/events/$slug'
     | '/events/all'
@@ -1271,6 +1282,7 @@ export interface FileRouteTypes {
     | '/academy/workshop'
     | '/account/profile'
     | '/admin/experts'
+    | '/admin/modules'
     | '/admin/users'
     | '/events/$slug'
     | '/events/all'
@@ -1630,6 +1642,13 @@ declare module '@tanstack/react-router' {
       path: '/experts'
       fullPath: '/admin/experts'
       preLoaderRoute: typeof AdminExpertsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/modules': {
+      id: '/admin/modules'
+      path: '/modules'
+      fullPath: '/admin/modules'
+      preLoaderRoute: typeof AdminModulesRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/users': {
@@ -2261,12 +2280,14 @@ const AccountRouteWithChildren =
 
 interface AdminRouteChildren {
   AdminExpertsRoute: typeof AdminExpertsRoute
+  AdminModulesRoute: typeof AdminModulesRoute
   AdminUsersRoute: typeof AdminUsersRoute
   AdminIndexRoute: typeof AdminIndexRoute
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
   AdminExpertsRoute: AdminExpertsRoute,
+  AdminModulesRoute: AdminModulesRoute,
   AdminUsersRoute: AdminUsersRoute,
   AdminIndexRoute: AdminIndexRoute,
 }

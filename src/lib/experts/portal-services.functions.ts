@@ -14,6 +14,7 @@ const CreateRequest = z.object({
 const RequestId = z.object({ requestId: z.string().uuid() });
 const Respond = RequestId.extend({ action: z.enum(["accept", "request_info", "decline"]) });
 const ModuleSubmission = z.object({
+  draftId: z.string().uuid().optional(),
   title: z.string().trim().min(3).max(240),
   moduleType: z.enum(["foundational", "technical", "applied", "policy", "managerial", "safety", "compliance", "soft_skills", "field_practicum", "other"]),
   payload: z.record(z.unknown()),
@@ -86,14 +87,26 @@ export const saveTrainerModuleSubmission = createServerFn({ method: "POST" })
     if (access.error || (access.data as { access?: string } | null)?.access !== "active_trainer") {
       throw new Error("active_trainer_required");
     }
-    const created = await context.supabase.rpc("module_draft_create", {
-      _title: data.title, _module_type: data.moduleType, _source_type: "external_submission",
+
+    let draftId = data.draftId;
+    if (!draftId) {
+      const created = await context.supabase.rpc("module_draft_create", {
+        _title: data.title,
+        _module_type: data.moduleType,
+        _source_type: "external_submission",
+      });
+      if (created.error) throw new Error(created.error.message);
+      draftId = created.data as string;
+    }
+
+    const updated = await context.supabase.rpc("module_draft_update", {
+      _draft_id: draftId,
+      _patch: data.payload as Json,
     });
-    if (created.error) throw new Error(created.error.message);
-    const draftId = created.data as string;
-    const updated = await context.supabase.rpc("module_draft_update", { _draft_id: draftId, _patch: data.payload as Json });
     if (updated.error) throw new Error(updated.error.message);
+
     if (!data.submit) return { draftId, subjectId: null, status: "draft" };
+
     const submitted = await context.supabase.rpc("module_draft_submit", { _draft_id: draftId });
     if (submitted.error) throw new Error(submitted.error.message);
     return { draftId, subjectId: submitted.data as string, status: "submitted" };
