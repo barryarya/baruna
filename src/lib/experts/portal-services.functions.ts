@@ -109,5 +109,33 @@ export const saveTrainerModuleSubmission = createServerFn({ method: "POST" })
 
     const submitted = await context.supabase.rpc("module_draft_submit", { _draft_id: draftId });
     if (submitted.error) throw new Error(submitted.error.message);
-    return { draftId, subjectId: submitted.data as string, status: "submitted" };
+    const subjectId = submitted.data as string;
+
+    // Update review_subjects metadata to track resubmitted status and timestamp
+    try {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { data: currentSubj } = await supabaseAdmin
+        .from("review_subjects")
+        .select("metadata")
+        .eq("id", subjectId)
+        .maybeSingle();
+
+      const existingMeta = (currentSubj?.metadata as Record<string, unknown>) ?? {};
+      await supabaseAdmin
+        .from("review_subjects")
+        .update({
+          current_status: "pending",
+          updated_at: new Date().toISOString(),
+          metadata: {
+            ...existingMeta,
+            review_status: "resubmitted",
+            resubmitted_at: new Date().toISOString(),
+          },
+        })
+        .eq("id", subjectId);
+    } catch {
+      // Non-critical metadata update failure
+    }
+
+    return { draftId, subjectId, status: "submitted" };
   });

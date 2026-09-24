@@ -63,7 +63,7 @@ function ReviewStatusPage() {
   const q = useTrainerPortal();
   const drafts = q.data?.moduleDrafts ?? [];
 
-  const handleOpenFile = async (filePath?: string) => {
+  const handleOpenFile = async (filePath?: string, fileName?: string, fileCategory?: string) => {
     if (!filePath) {
       toast.info("Berkas tersimpan sebagai metadata draf pengajuan.");
       return;
@@ -76,7 +76,8 @@ function ReviewStatusPage() {
         toast.error("Gagal mendapatkan akses berkas.");
         return;
       }
-      window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+      const viewerUrl = `/document-viewer?url=${encodeURIComponent(data.signedUrl)}&name=${encodeURIComponent(fileName || "Dokumen")}&category=${encodeURIComponent(fileCategory || "Lampiran")}`;
+      window.open(viewerUrl, "_blank", "noopener,noreferrer");
     } catch {
       toast.error("Tidak dapat membuka berkas.");
     }
@@ -220,11 +221,11 @@ function ReviewStatusPage() {
                             {file.path ? (
                               <button
                                 type="button"
-                                onClick={() => handleOpenFile(file.path)}
-                                title="Buka / Unduh Dokumen"
+                                onClick={() => handleOpenFile(file.path, file.name, file.type)}
+                                title="Buka Dokumen di Tab Pratinjau"
                                 className="inline-flex items-center gap-1 rounded-md bg-marine/10 px-2 py-1 text-[10px] font-bold text-marine hover:bg-marine hover:text-white transition cursor-pointer"
                               >
-                                <ExternalLink className="h-3 w-3" /> Buka
+                                <ExternalLink className="h-3 w-3" /> Buka di Tab
                               </button>
                             ) : (
                               <span className="inline-block rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-medium text-slate-600">

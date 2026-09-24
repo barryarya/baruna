@@ -22,7 +22,10 @@ export type AdminExpertItem = {
   jobTitle: string | null;
   roles: string[];
   expertise: string[];
-  status: string; // pending, under_review, decision_pending, approved, rejected, revision_requested
+  status: string; // pending, under_review, decision_pending, approved, rejected, revision_requested, resubmitted
+  isResubmitted?: boolean;
+  resubmittedAt?: string | null;
+  lastRevisionRationale?: string | null;
   createdAt: string;
   updatedAt: string;
   documentsCount: number;
@@ -79,38 +82,49 @@ export const listAdminExpertApplications = createServerFn({ method: "GET" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     // Fetch subjects of kind 'expert'
-    let query = supabaseAdmin
+    const { data: subjects, error: subjErr } = await supabaseAdmin
       .from("review_subjects")
-      .select("id, title, current_status, submitted_by, created_at, updated_at")
+      .select("id, title, current_status, submitted_by, created_at, updated_at, metadata")
       .eq("kind", "expert")
       .order("created_at", { ascending: false });
 
-    if (input.status && input.status !== "all") {
-      if (input.status === "pending") {
-        query = query.in("current_status", ["pending", "under_review", "decision_pending"]);
-      } else {
-        query = query.eq("current_status", input.status);
-      }
-    }
-
-    const { data: subjects, error: subjErr } = await query;
     if (subjErr) throw new Error(subjErr.message);
     if (!subjects || subjects.length === 0) return [];
 
     const subjectIds = subjects.map((s) => s.id);
 
+    // Fetch latest decisions to resolve 'revision_requested' status
+    const { data: decisions } = await supabaseAdmin
+      .from("review_decisions")
+      .select("subject_id, decision, rationale, created_at")
+      .in("subject_id", subjectIds)
+      .order("created_at", { ascending: false });
+
+    const latestDecisionMap = new Map<string, { decision: string; rationale: string | null; createdAt: string }>();
+    (decisions ?? []).forEach((d) => {
+      if (!latestDecisionMap.has(d.subject_id)) {
+        latestDecisionMap.set(d.subject_id, {
+          decision: d.decision,
+          rationale: d.rationale,
+          createdAt: d.created_at,
+        });
+      }
+    });
+
     // Fetch linked review_drafts
     const { data: drafts } = await supabaseAdmin
       .from("review_drafts")
-      .select("id, linked_subject_id, payload")
+      .select("id, linked_subject_id, payload, status, updated_at")
       .in("linked_subject_id", subjectIds);
 
-    const draftMap = new Map<string, { id: string; payload: ExpertDraftPayload }>();
+    const draftMap = new Map<string, { id: string; payload: ExpertDraftPayload; status: string; updated_at?: string }>();
     (drafts ?? []).forEach((d) => {
       if (d.linked_subject_id) {
         draftMap.set(d.linked_subject_id, {
           id: d.id,
           payload: (d.payload as unknown as ExpertDraftPayload) ?? {},
+          status: d.status,
+          updated_at: d.updated_at,
         });
       }
     });
@@ -132,7 +146,7 @@ export const listAdminExpertApplications = createServerFn({ method: "GET" })
       }
     });
 
-    const items: AdminExpertItem[] = subjects.map((subj) => {
+    let items: AdminExpertItem[] = subjects.map((subj) => {
       const draft = draftMap.get(subj.id);
       const payload = draft?.payload;
       const rawPayload = (payload ?? {}) as Record<string, unknown>;
@@ -152,6 +166,30 @@ export const listAdminExpertApplications = createServerFn({ method: "GET" })
       const expertise = Array.isArray(payload?.expertise) ? (payload.expertise as string[]) : [];
       const documentsCount = Array.isArray(payload?.documents) ? payload.documents.length : 0;
 
+      const lastDec = latestDecisionMap.get(subj.id);
+      const lastDecision = lastDec?.decision;
+      const subjMeta = (subj.metadata as Record<string, unknown>) ?? {};
+
+      const lastDecisionTime = lastDec ? new Date(lastDec.createdAt).getTime() : 0;
+      const draftUpdateTime = draft?.updated_at ? new Date(draft.updated_at).getTime() : 0;
+      const subjUpdateTime = subj.updated_at ? new Date(subj.updated_at).getTime() : 0;
+
+      const isResubmitted =
+        lastDecision === "return_for_revision" &&
+        (subj.current_status === "pending" || draft?.status === "submitted") &&
+        (draftUpdateTime > lastDecisionTime || subjUpdateTime > lastDecisionTime || subjMeta.review_status === "resubmitted");
+
+      let status = subj.current_status;
+      if (subj.current_status === "approved" || lastDecision === "approve") {
+        status = "approved";
+      } else if (subj.current_status === "rejected" || lastDecision === "reject") {
+        status = "rejected";
+      } else if (isResubmitted) {
+        status = "resubmitted";
+      } else if (lastDecision === "return_for_revision") {
+        status = "revision_requested";
+      }
+
       return {
         subjectId: subj.id,
         draftId: draft?.id ?? null,
@@ -164,7 +202,12 @@ export const listAdminExpertApplications = createServerFn({ method: "GET" })
         jobTitle,
         roles,
         expertise,
-        status: subj.current_status,
+        status,
+        isResubmitted,
+        resubmittedAt: isResubmitted
+          ? (typeof subjMeta.resubmitted_at === "string" ? subjMeta.resubmitted_at : (draft?.updated_at || subj.updated_at))
+          : null,
+        lastRevisionRationale: lastDec?.rationale || (typeof subjMeta.last_rationale === "string" ? subjMeta.last_rationale : null),
         createdAt: subj.created_at,
         updatedAt: subj.updated_at,
         documentsCount,
@@ -172,6 +215,18 @@ export const listAdminExpertApplications = createServerFn({ method: "GET" })
         isPublished: published?.current_status === "published",
       };
     });
+
+    if (input.status && input.status !== "all") {
+      if (input.status === "revision_requested") {
+        items = items.filter((it) => it.status === "revision_requested");
+      } else if (input.status === "resubmitted") {
+        items = items.filter((it) => it.status === "resubmitted");
+      } else if (input.status === "pending") {
+        items = items.filter((it) => it.status === "pending" || it.status === "under_review" || it.status === "decision_pending" || it.status === "resubmitted");
+      } else {
+        items = items.filter((it) => it.status === input.status);
+      }
+    }
 
     if (input.search) {
       const q = input.search.toLowerCase();
@@ -199,7 +254,7 @@ export const getAdminExpertDetail = createServerFn({ method: "GET" })
 
     const { data: subj, error: subjErr } = await supabaseAdmin
       .from("review_subjects")
-      .select("id, title, current_status, submitted_by, created_at, updated_at")
+      .select("id, title, current_status, submitted_by, created_at, updated_at, metadata")
       .eq("id", input.subjectId)
       .eq("kind", "expert")
       .maybeSingle();
@@ -209,7 +264,7 @@ export const getAdminExpertDetail = createServerFn({ method: "GET" })
 
     const { data: draft } = await supabaseAdmin
       .from("review_drafts")
-      .select("id, payload")
+      .select("id, payload, status, updated_at")
       .eq("linked_subject_id", subj.id)
       .maybeSingle();
 
@@ -253,6 +308,29 @@ export const getAdminExpertDetail = createServerFn({ method: "GET" })
       .eq("source_submission_id", subj.id)
       .maybeSingle();
 
+    const latestDec = (decisions ?? [])[0];
+    const latestDecision = latestDec?.decision;
+    const subjMeta = (subj.metadata as Record<string, unknown>) ?? {};
+    const lastDecisionTime = latestDec ? new Date(latestDec.created_at).getTime() : 0;
+    const draftUpdateTime = draft?.updated_at ? new Date(draft.updated_at).getTime() : 0;
+    const subjUpdateTime = subj.updated_at ? new Date(subj.updated_at).getTime() : 0;
+
+    const isResubmitted =
+      latestDecision === "return_for_revision" &&
+      (subj.current_status === "pending" || draft?.status === "submitted") &&
+      (draftUpdateTime > lastDecisionTime || subjUpdateTime > lastDecisionTime || subjMeta.review_status === "resubmitted");
+
+    let status = subj.current_status;
+    if (subj.current_status === "approved" || latestDecision === "approve") {
+      status = "approved";
+    } else if (subj.current_status === "rejected" || latestDecision === "reject") {
+      status = "rejected";
+    } else if (isResubmitted) {
+      status = "resubmitted";
+    } else if (latestDecision === "return_for_revision") {
+      status = "revision_requested";
+    }
+
     return {
       subjectId: subj.id,
       draftId: draft?.id ?? null,
@@ -275,22 +353,27 @@ export const getAdminExpertDetail = createServerFn({ method: "GET" })
         typeof payload?.yearsExperience === "string" ? payload.yearsExperience : null,
       publications: typeof payload?.publications === "string" ? payload.publications : null,
       keyProjects: typeof payload?.keyProjects === "string" ? payload.keyProjects : null,
-      status: subj.current_status,
+      status,
+      isResubmitted,
+      resubmittedAt: isResubmitted
+        ? (typeof subjMeta.resubmitted_at === "string" ? subjMeta.resubmitted_at : (draft?.updated_at || subj.updated_at))
+        : null,
+      lastRevisionRationale: latestDec?.rationale || (typeof subjMeta.last_rationale === "string" ? subjMeta.last_rationale : null),
       createdAt: subj.created_at,
-      updatedAt: subj.updated_at,
-      documentsCount: documentsWithUrls.length,
-      documents: documentsWithUrls,
-      publishedSlug: publishedExpert?.slug ?? null,
-      isPublished: publishedExpert?.current_status === "published",
-      decisionsHistory: (decisions ?? []).map((d) => ({
-        id: d.id,
-        decision: d.decision,
-        rationale: d.rationale,
-        decidedBy: d.decided_by,
-        createdAt: d.created_at,
-      })),
-    };
-  });
+        updatedAt: subj.updated_at,
+        documentsCount: documentsWithUrls.length,
+        documents: documentsWithUrls,
+        publishedSlug: publishedExpert?.slug ?? null,
+        isPublished: publishedExpert?.current_status === "published",
+        decisionsHistory: (decisions ?? []).map((d) => ({
+          id: d.id,
+          decision: d.decision,
+          rationale: d.rationale,
+          decidedBy: d.decided_by,
+          createdAt: d.created_at,
+        })),
+      };
+    });
 
 export const recordAdminExpertDecision = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -310,28 +393,85 @@ export const recordAdminExpertDecision = createServerFn({ method: "POST" })
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    if (input.decision === "return_for_revision") {
-      const { data: decId, error } = await supabaseAdmin.rpc("return_for_revision", {
-        _subject_id: input.subjectId,
-        _rationale: input.rationale ?? "",
-      });
-      if (error) throw new Error(error.message);
-      return { success: true, decisionId: decId, decision: input.decision };
+    // 1. Fetch subject
+    const { data: subj, error: subjErr } = await supabaseAdmin
+      .from("review_subjects")
+      .select("id, kind, title, description, external_ref, submitted_by, current_status, metadata")
+      .eq("id", input.subjectId)
+      .single();
+
+    if (subjErr || !subj) {
+      throw new Error("Pengajuan tidak ditemukan.");
     }
 
-    // Approve or Reject
-    const { data: decId, error } = await supabaseAdmin.rpc("finalize_decision", {
-      _subject_id: input.subjectId,
-      _decision: input.decision,
-      _rationale: input.rationale ?? "",
-    });
-    if (error) throw new Error(error.message);
+    // 2. Insert decision record
+    const rationaleText =
+      input.rationale?.trim() ||
+      (input.decision === "return_for_revision"
+        ? "Perlu revisi kelengkapan dokumen."
+        : input.decision === "approve"
+          ? "Pengajuan telah diverifikasi dan disetujui."
+          : "Pengajuan ditolak.");
+
+    const { data: decRecord, error: decErr } = await supabaseAdmin
+      .from("review_decisions")
+      .insert({
+        subject_id: input.subjectId,
+        decided_by: context.userId,
+        decision: input.decision,
+        rationale: rationaleText,
+      })
+      .select("id")
+      .single();
+
+    if (decErr || !decRecord) {
+      throw new Error(decErr?.message || "Gagal mencatat keputusan verifikasi.");
+    }
+
+    const decisionId = decRecord.id;
+
+    if (input.decision === "return_for_revision") {
+      const currentMeta = (subj.metadata as Record<string, unknown>) ?? {};
+      await supabaseAdmin
+        .from("review_subjects")
+        .update({
+          current_status: "pending",
+          metadata: {
+            ...currentMeta,
+            review_status: "revision_requested",
+            last_decision: "return_for_revision",
+            last_rationale: rationaleText,
+            revised_at: new Date().toISOString(),
+          } as never,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", input.subjectId);
+
+      // Re-open draft so submitter can edit and replace files
+      await supabaseAdmin
+        .from("review_drafts")
+        .update({
+          status: "draft",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("linked_subject_id", input.subjectId);
+
+      return { success: true, decisionId, decision: input.decision };
+    }
 
     if (input.decision === "approve") {
+      await supabaseAdmin
+        .from("review_subjects")
+        .update({
+          current_status: "approved",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", input.subjectId);
+
       try {
         await publishApprovedExpert({
           subjectId: input.subjectId,
-          decisionId: decId,
+          decisionId,
           decidedBy: context.userId,
         });
       } catch (publishErr) {
@@ -342,9 +482,23 @@ export const recordAdminExpertDecision = createServerFn({ method: "POST" })
             : "Gagal mempublikasikan profil expert ke direktori.",
         );
       }
+
+      return { success: true, decisionId, decision: input.decision };
     }
 
-    return { success: true, decisionId: decId, decision: input.decision };
+    if (input.decision === "reject") {
+      await supabaseAdmin
+        .from("review_subjects")
+        .update({
+          current_status: "rejected",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", input.subjectId);
+
+      return { success: true, decisionId, decision: input.decision };
+    }
+
+    return { success: true, decisionId, decision: input.decision };
   });
 
 export const syncExpertToDirectory = createServerFn({ method: "POST" })

@@ -6,7 +6,9 @@ import {
   Award,
   CheckCircle2,
   Clock,
+  Download,
   ExternalLink,
+  Eye,
   FileCheck2,
   FileText,
   Filter,
@@ -21,8 +23,11 @@ import {
   ShieldCheck,
   UserCheck,
   XCircle,
+  AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
+import { DocumentViewerModal } from "@/components/baruna/DocumentViewerModal";
+import { triggerFileDownload } from "@/lib/storage/mime";
 import {
   listAdminExpertApplications,
   getAdminExpertDetail,
@@ -80,6 +85,12 @@ function getStatusBadge(status: string) {
           <CheckCircle2 className="h-3 w-3" /> Disetujui (Aktif)
         </Badge>
       );
+    case "resubmitted":
+      return (
+        <Badge className="bg-sky-100 text-sky-900 border-sky-300 hover:bg-sky-100 flex items-center gap-1 font-semibold shadow-2xs">
+          <RotateCcw className="h-3 w-3 text-sky-600 animate-spin" style={{ animationDuration: "3s" }} /> Sudah Direvisi
+        </Badge>
+      );
     case "revision_requested":
       return (
         <Badge className="bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-100 flex items-center gap-1 font-medium">
@@ -133,6 +144,7 @@ function AdminExpertsPage() {
   const stats = useMemo(() => {
     let total = applications.length;
     let pending = 0;
+    let resubmitted = 0;
     let revision = 0;
     let approved = 0;
 
@@ -143,6 +155,9 @@ function AdminExpertsPage() {
         item.status === "decision_pending"
       ) {
         pending++;
+      } else if (item.status === "resubmitted") {
+        pending++;
+        resubmitted++;
       } else if (item.status === "revision_requested") {
         revision++;
       } else if (item.status === "approved") {
@@ -150,7 +165,7 @@ function AdminExpertsPage() {
       }
     });
 
-    return { total, pending, revision, approved };
+    return { total, pending, resubmitted, revision, approved };
   }, [applications]);
 
   // Selected candidate detail query
@@ -216,7 +231,14 @@ function AdminExpertsPage() {
               <Clock className="h-4 w-4" />
             </span>
           </div>
-          <p className="mt-3 text-2xl font-bold text-yellow-700">{stats.pending}</p>
+          <div className="flex items-baseline gap-2 mt-3">
+            <p className="text-2xl font-bold text-yellow-700">{stats.pending}</p>
+            {stats.resubmitted > 0 && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-bold text-sky-800 border border-sky-200">
+                <RotateCcw className="h-2.5 w-2.5" /> {stats.resubmitted} Sudah Direvisi
+              </span>
+            )}
+          </div>
           <span className="text-xs text-muted-foreground">Perlu pemeriksaan berkas & substansi</span>
         </div>
 
@@ -268,6 +290,7 @@ function AdminExpertsPage() {
             {[
               { id: "all", label: "Semua" },
               { id: "pending", label: "Menunggu" },
+              { id: "resubmitted", label: "Sudah Direvisi" },
               { id: "revision_requested", label: "Perlu Revisi" },
               { id: "approved", label: "Disetujui" },
               { id: "rejected", label: "Ditolak" },
@@ -379,6 +402,11 @@ function AdminExpertsPage() {
                     <td className="px-6 py-4">
                       <div className="flex flex-col gap-1 items-start">
                         {getStatusBadge(item.status)}
+                        {item.status === "resubmitted" && (
+                          <span className="text-[11px] font-medium text-sky-700">
+                            Revisi dikirim {formatDate(item.resubmittedAt || item.updatedAt)}
+                          </span>
+                        )}
                         {item.publishedSlug && (
                           <a
                             href={`/experts/${item.publishedSlug}`}
@@ -449,12 +477,21 @@ function ExpertDetailModal({
   decisionFn: any;
 }) {
   const [rationale, setRationale] = useState("");
+  const [rationaleError, setRationaleError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("profile");
   const [submitting, setSubmitting] = useState(false);
+  const [previewDoc, setPreviewDoc] = useState<{
+    url: string;
+    name: string;
+    category?: string;
+  } | null>(null);
 
   const handleDecision = async (decision: "approve" | "return_for_revision" | "reject") => {
+    setRationaleError(null);
     if ((decision === "return_for_revision" || decision === "reject") && !rationale.trim()) {
-      toast.error("Mohon berikan catatan alasan/revisi terlebih dahulu.");
+      const errMsg = "Wajib mengisi catatan evaluasi/alasan revisi agar calon expert mengetahui bagian yang perlu diperbaiki.";
+      setRationaleError(errMsg);
+      toast.error(errMsg);
       return;
     }
 
@@ -489,6 +526,7 @@ function ExpertDetailModal({
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Gagal memproses keputusan verifikasi.";
       toast.error(msg);
+      setRationaleError(msg);
     } finally {
       setSubmitting(false);
     }
@@ -541,6 +579,35 @@ function ExpertDetailModal({
                 )}
               </div>
             )}
+
+            {detail?.status === "resubmitted" && (
+              <div className="mt-3 rounded-xl border border-sky-300 bg-sky-50/90 p-4 shadow-2xs">
+                <div className="flex items-center gap-2 font-bold text-sky-950 text-sm">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-sky-200 text-sky-800">
+                    <RotateCcw className="h-3.5 w-3.5" />
+                  </span>
+                  Pengajuan Calon Expert Ini Sudah Direvisi
+                  <Badge variant="outline" className="bg-sky-100 text-sky-800 border-sky-300 text-[10px] ml-auto">
+                    Revisi Baru Siap Verifikasi
+                  </Badge>
+                </div>
+                <p className="mt-1.5 text-xs text-sky-900 leading-relaxed">
+                  Calon expert telah memperbarui data dan mengunggah berkas perbaikan pada{" "}
+                  <strong>{formatDate(detail.resubmittedAt || detail.updatedAt)}</strong>. Silakan periksa perubahan profil dan kelengkapan dokumen sebelum memberikan persetujuan (ACC).
+                </p>
+                {detail.lastRevisionRationale && (
+                  <div className="mt-3 rounded-lg border border-sky-200 bg-white p-3 text-xs">
+                    <span className="block font-semibold text-slate-800 text-[11px] uppercase tracking-wider mb-0.5">
+                      Catatan Permintaan Revisi Sebelumnya (dari Verifikator):
+                    </span>
+                    <p className="italic text-slate-700">
+                      &quot;{detail.lastRevisionRationale}&quot;
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
             <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-3">
             <TabsList className="grid grid-cols-4 bg-slate-100">
               <TabsTrigger value="profile">Biodata Diri</TabsTrigger>
@@ -749,16 +816,45 @@ function ExpertDetailModal({
                         </p>
                       </div>
 
-                      <div className="mt-4 pt-3 border-t border-border/60">
+                      <div className="mt-4 pt-3 border-t border-border/60 flex items-center gap-2">
                         {doc.downloadUrl ? (
-                          <a
-                            href={doc.downloadUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-marine/10 py-2 text-xs font-semibold text-marine hover:bg-marine/20 transition"
-                          >
-                            <ExternalLink className="h-3.5 w-3.5" /> Buka / Unduh Dokumen
-                          </a>
+                          <>
+                            <a
+                              href={`/document-viewer?url=${encodeURIComponent(doc.downloadUrl)}&name=${encodeURIComponent(doc.name)}&category=${encodeURIComponent(doc.category)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-marine/10 py-2 px-3 text-xs font-semibold text-marine hover:bg-marine hover:text-white transition"
+                              title="Buka pratinjau di tab peramban baru"
+                            >
+                              <ExternalLink className="h-3.5 w-3.5" /> Buka di Tab
+                            </a>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() =>
+                                setPreviewDoc({
+                                  url: doc.downloadUrl!,
+                                  name: doc.name,
+                                  category: doc.category,
+                                })
+                              }
+                              className="h-8 text-xs font-semibold border-border hover:bg-slate-100 text-navy gap-1"
+                              title="Pratinjau cepat di dalam dialog"
+                            >
+                              <Eye className="h-3.5 w-3.5 text-marine" /> Pratinjau
+                            </Button>
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => triggerFileDownload(doc.downloadUrl!, doc.name)}
+                              className="h-8 w-8 text-muted-foreground hover:text-navy hover:bg-slate-100"
+                              title="Unduh langsung file asli"
+                            >
+                              <Download className="h-3.5 w-3.5" />
+                            </Button>
+                          </>
                         ) : (
                           <span className="text-xs text-muted-foreground italic">
                             Berkas tidak dapat diakses
@@ -814,9 +910,17 @@ function ExpertDetailModal({
                     rows={4}
                     placeholder="Contoh: Berkas CV dan sertifikat keahlian telah diverifikasi lengkap dan valid untuk bidang Budidaya Perikanan..."
                     value={rationale}
-                    onChange={(e) => setRationale(e.target.value)}
-                    className="w-full text-sm"
+                    onChange={(e) => {
+                      setRationale(e.target.value);
+                      if (rationaleError) setRationaleError(null);
+                    }}
+                    className={`w-full text-sm ${rationaleError ? "border-destructive ring-1 ring-destructive" : ""}`}
                   />
+                  {rationaleError && (
+                    <p className="mt-1.5 text-xs font-semibold text-destructive flex items-center gap-1">
+                      <AlertCircle className="h-3.5 w-3.5 shrink-0" /> {rationaleError}
+                    </p>
+                  )}
                 </div>
 
                 <div className="pt-3 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-3">
@@ -850,7 +954,8 @@ function ExpertDetailModal({
                       onClick={() => handleDecision("return_for_revision")}
                       className="text-xs border-amber-300 text-amber-700 hover:bg-amber-50 flex items-center gap-1.5"
                     >
-                      <RotateCcw className="h-4 w-4" /> Minta Revisi
+                      <RotateCcw className={`h-4 w-4 ${submitting ? "animate-spin" : ""}`} />
+                      {submitting ? "Memproses..." : "Minta Revisi"}
                     </Button>
 
                     <Button
@@ -859,10 +964,12 @@ function ExpertDetailModal({
                       onClick={() => handleDecision("approve")}
                       className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold flex items-center gap-1.5 shadow-sm"
                     >
-                      <CheckCircle2 className="h-4 w-4" />
-                      {detail?.status === "approved"
-                        ? "Sinkronkan / Perbarui Publikasi"
-                        : "Setujui & Publikasikan Expert"}
+                      <CheckCircle2 className={`h-4 w-4 ${submitting ? "animate-spin" : ""}`} />
+                      {submitting
+                        ? "Memproses..."
+                        : detail?.status === "approved"
+                          ? "Sinkronkan / Perbarui Publikasi"
+                          : "Setujui & Publikasikan Expert"}
                     </Button>
                   </div>
                 </div>
@@ -870,6 +977,15 @@ function ExpertDetailModal({
             </TabsContent>
           </Tabs>
           </>
+        )}
+        {previewDoc && (
+          <DocumentViewerModal
+            url={previewDoc.url}
+            name={previewDoc.name}
+            category={previewDoc.category}
+            isOpen={Boolean(previewDoc)}
+            onClose={() => setPreviewDoc(null)}
+          />
         )}
       </DialogContent>
     </Dialog>

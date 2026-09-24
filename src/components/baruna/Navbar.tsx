@@ -1,5 +1,8 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
+import { listMyNotifications } from "@/lib/notifications/notifications.functions";
 import {
   Home,
   GraduationCap,
@@ -53,6 +56,17 @@ export function Navbar() {
   const { authState, viewer, signOut } = useHomeExperience();
   const dashboardUrl = viewer?.dashboardUrl ?? "/dashboard";
 
+  const listNotificationsFn = useServerFn(listMyNotifications);
+  const { data: notifications } = useQuery({
+    queryKey: ["notifications", "my-navbar-badge"],
+    queryFn: () => listNotificationsFn(),
+    enabled: authState === "authenticated",
+    staleTime: 15000,
+  });
+
+  const revisionCount = notifications?.filter((n) => n.type === "revision_requested").length ?? 0;
+  const hasNotifications = (notifications?.length ?? 0) > 0;
+
   const handleSignOut = async () => {
     await signOut();
     await navigate({ to: "/", replace: true });
@@ -103,10 +117,17 @@ export function Navbar() {
             <>
               <Link
                 to="/notifications"
-                className="grid h-10 w-10 place-items-center rounded-full text-foreground/70 transition-colors hover:bg-muted hover:text-marine"
+                className="relative grid h-10 w-10 place-items-center rounded-full text-foreground/70 transition-colors hover:bg-muted hover:text-marine"
                 aria-label="Notifications"
               >
                 <Bell className="h-5 w-5" />
+                {revisionCount > 0 ? (
+                  <span className="absolute top-1 right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-amber-500 px-1 text-[9px] font-extrabold text-white shadow-xs">
+                    {revisionCount}
+                  </span>
+                ) : hasNotifications ? (
+                  <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-marine" />
+                ) : null}
               </Link>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -216,6 +237,22 @@ export function Navbar() {
                 <div className="mt-4 border-t border-border pt-4">
                   {authState === "authenticated" && viewer ? (
                     <div className="space-y-1">
+                      <Link
+                        to="/notifications"
+                        onClick={() => setOpen(false)}
+                        className="flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium text-foreground/80 hover:bg-muted hover:text-marine"
+                      >
+                        <span className="flex items-center gap-3">
+                          <Bell className="h-5 w-5" /> Notifikasi
+                        </span>
+                        {revisionCount > 0 ? (
+                          <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold text-white">
+                            {revisionCount} Perlu Revisi
+                          </span>
+                        ) : hasNotifications ? (
+                          <span className="h-2 w-2 rounded-full bg-marine" />
+                        ) : null}
+                      </Link>
                       <Link
                         to="/account/profile"
                         onClick={() => setOpen(false)}

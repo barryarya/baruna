@@ -14,6 +14,7 @@ import favicon from "@/assets/baruna-icon.png";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { PresentationMode } from "@/components/baruna/PresentationMode";
 import { HomeExperienceProvider } from "@/components/baruna/HomeExperienceProvider";
+import { Toaster } from "@/components/ui/sonner";
 
 function NotFoundComponent() {
   return (
@@ -141,6 +142,7 @@ function RootComponent() {
         <Outlet />
         {/* Global single-flag Presentation / Demo Mode control + banner. */}
         <PresentationMode />
+        <Toaster position="top-right" richColors />
       </HomeExperienceProvider>
     </QueryClientProvider>
   );

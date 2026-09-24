@@ -21,6 +21,7 @@ import { LEVEL_MODULE_LIMIT } from "@/lib/trainerModules";
 import { useTrainerPortal } from "@/lib/experts/useTrainerPortal";
 import { saveTrainerModuleSubmission } from "@/lib/experts/portal-services.functions";
 import { supabase } from "@/integrations/supabase/client";
+import { resolveFileContentType } from "@/lib/storage/mime";
 
 export const Route = createFileRoute("/experts/portal/submit-module")({
   head: () => ({
@@ -307,13 +308,14 @@ function SubmitModulePage() {
                 // Upload new files
                 for (const [type, f] of Object.entries(attachedFiles)) {
                   let storagePath: string | undefined = undefined;
+                  const contentType = resolveFileContentType(f.name, f.type);
                   if (uid) {
                     try {
                       const safeName = f.name.toLowerCase().replace(/[^a-z0-9._-]+/g, "-");
                       const path = `users/${uid}/modules/${draftId || Date.now()}/${Date.now()}-${safeName}`;
                       const { error: upErr } = await supabase.storage
                         .from("expert-applications")
-                        .upload(path, f, { contentType: f.type || "application/octet-stream", upsert: true });
+                        .upload(path, f, { contentType, upsert: true });
 
                       if (!upErr) {
                         storagePath = path;
@@ -328,7 +330,7 @@ function SubmitModulePage() {
                     name: f.name,
                     fileName: f.name,
                     fileSize: f.size,
-                    fileType: f.type || "application/octet-stream",
+                    fileType: contentType,
                     path: storagePath,
                     uploadedAt: new Date().toISOString(),
                   });

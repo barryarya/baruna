@@ -19,6 +19,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as CommunityRouteImport } from './routes/community'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as DemoRouteImport } from './routes/demo'
+import { Route as DocumentViewerRouteImport } from './routes/document-viewer'
 import { Route as EventsRouteImport } from './routes/events'
 import { Route as ExpertsRouteImport } from './routes/experts'
 import { Route as FellowshipRouteImport } from './routes/fellowship'
@@ -169,6 +170,11 @@ const DashboardRoute = DashboardRouteImport.update({
 const DemoRoute = DemoRouteImport.update({
   id: '/demo',
   path: '/demo',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DocumentViewerRoute = DocumentViewerRouteImport.update({
+  id: '/document-viewer',
+  path: '/document-viewer',
   getParentRoute: () => rootRouteImport,
 } as any)
 const EventsRoute = EventsRouteImport.update({
@@ -706,6 +712,7 @@ export interface FileRoutesByFullPath {
   '/community': typeof CommunityRoute
   '/dashboard': typeof DashboardRoute
   '/demo': typeof DemoRoute
+  '/document-viewer': typeof DocumentViewerRoute
   '/events': typeof EventsRouteWithChildren
   '/experts': typeof ExpertsRouteWithChildren
   '/fellowship': typeof FellowshipRoute
@@ -817,6 +824,7 @@ export interface FileRoutesByTo {
   '/community': typeof CommunityRoute
   '/dashboard': typeof DashboardRoute
   '/demo': typeof DemoRoute
+  '/document-viewer': typeof DocumentViewerRoute
   '/fellowship': typeof FellowshipRoute
   '/help': typeof HelpRoute
   '/knowledge-hub': typeof KnowledgeHubRoute
@@ -925,6 +933,7 @@ export interface FileRoutesById {
   '/community': typeof CommunityRoute
   '/dashboard': typeof DashboardRoute
   '/demo': typeof DemoRoute
+  '/document-viewer': typeof DocumentViewerRoute
   '/events': typeof EventsRouteWithChildren
   '/experts': typeof ExpertsRouteWithChildren
   '/fellowship': typeof FellowshipRoute
@@ -1040,6 +1049,7 @@ export interface FileRouteTypes {
     | '/community'
     | '/dashboard'
     | '/demo'
+    | '/document-viewer'
     | '/events'
     | '/experts'
     | '/fellowship'
@@ -1151,6 +1161,7 @@ export interface FileRouteTypes {
     | '/community'
     | '/dashboard'
     | '/demo'
+    | '/document-viewer'
     | '/fellowship'
     | '/help'
     | '/knowledge-hub'
@@ -1258,6 +1269,7 @@ export interface FileRouteTypes {
     | '/community'
     | '/dashboard'
     | '/demo'
+    | '/document-viewer'
     | '/events'
     | '/experts'
     | '/fellowship'
@@ -1372,6 +1384,7 @@ export interface RootRouteChildren {
   CommunityRoute: typeof CommunityRoute
   DashboardRoute: typeof DashboardRoute
   DemoRoute: typeof DemoRoute
+  DocumentViewerRoute: typeof DocumentViewerRoute
   EventsRoute: typeof EventsRouteWithChildren
   ExpertsRoute: typeof ExpertsRouteWithChildren
   FellowshipRoute: typeof FellowshipRoute
@@ -1460,6 +1473,13 @@ declare module '@tanstack/react-router' {
       path: '/demo'
       fullPath: '/demo'
       preLoaderRoute: typeof DemoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/document-viewer': {
+      id: '/document-viewer'
+      path: '/document-viewer'
+      fullPath: '/document-viewer'
+      preLoaderRoute: typeof DocumentViewerRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/events': {
@@ -2449,6 +2469,7 @@ const rootRouteChildren: RootRouteChildren = {
   CommunityRoute: CommunityRoute,
   DashboardRoute: DashboardRoute,
   DemoRoute: DemoRoute,
+  DocumentViewerRoute: DocumentViewerRoute,
   EventsRoute: EventsRouteWithChildren,
   ExpertsRoute: ExpertsRouteWithChildren,
   FellowshipRoute: FellowshipRoute,
