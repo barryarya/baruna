@@ -142,7 +142,7 @@ function AdminExpertsPage() {
 
   // Calculate statistics
   const stats = useMemo(() => {
-    let total = applications.length;
+    const total = applications.length;
     let pending = 0;
     let resubmitted = 0;
     let revision = 0;
@@ -820,11 +820,11 @@ function ExpertDetailModal({
                         {doc.downloadUrl ? (
                           <>
                             <a
-                              href={`/document-viewer?url=${encodeURIComponent(doc.downloadUrl)}&name=${encodeURIComponent(doc.name)}&category=${encodeURIComponent(doc.category)}`}
+                              href={doc.downloadUrl}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-marine/10 py-2 px-3 text-xs font-semibold text-marine hover:bg-marine hover:text-white transition"
-                              title="Buka pratinjau di tab peramban baru"
+                              title="Buka berkas langsung di tab peramban baru"
                             >
                               <ExternalLink className="h-3.5 w-3.5" /> Buka di Tab
                             </a>

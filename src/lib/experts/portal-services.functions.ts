@@ -26,7 +26,44 @@ export const getTrainerPortalBootstrap = createServerFn({ method: "GET" })
   .handler(async ({ context }): Promise<TrainerPortalBootstrap> => {
     const { data, error } = await context.supabase.rpc("trainer_portal_bootstrap");
     if (error) throw new Error(error.message);
-    return data as unknown as TrainerPortalBootstrap;
+    const bootstrap = data as unknown as TrainerPortalBootstrap;
+
+    // Pastikan semua module_registry resmi milik pengguna terhubung ke daftar modules
+    try {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { data: regModules } = await supabaseAdmin
+        .from("module_registry")
+        .select("id, title, summary, current_status, estimated_learning_hours, version, language, module_type, target_participants, updated_at")
+        .or(`original_contributor_id.eq.${context.userId},created_by.eq.${context.userId}`);
+
+      if (regModules && regModules.length > 0) {
+        const existingIds = new Set((bootstrap.modules ?? []).map((m) => m.id));
+        const mergedModules = [...(bootstrap.modules ?? [])];
+
+        for (const rm of regModules) {
+          if (!existingIds.has(rm.id)) {
+            mergedModules.push({
+              id: rm.id,
+              title: rm.title,
+              summary: rm.summary,
+              status: rm.current_status,
+              hours: rm.estimated_learning_hours,
+              version: rm.version,
+              language: rm.language,
+              moduleType: rm.module_type,
+              targetParticipants: rm.target_participants,
+              updatedAt: rm.updated_at,
+            });
+            existingIds.add(rm.id);
+          }
+        }
+        bootstrap.modules = mergedModules;
+      }
+    } catch (enrichErr) {
+      console.warn("[getTrainerPortalBootstrap] enrichment warning:", enrichErr);
+    }
+
+    return bootstrap;
   });
 
 export const createExpertServiceRequest = createServerFn({ method: "POST" })

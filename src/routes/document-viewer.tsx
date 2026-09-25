@@ -29,9 +29,9 @@ export const Route = createFileRoute("/document-viewer")({
     name: typeof search.name === "string" ? search.name : "Dokumen",
     category: typeof search.category === "string" ? search.category : "Dokumen",
   }),
-  head: ({ search }) => ({
+  head: () => ({
     meta: [
-      { title: `${search.name || "Pratinjau Dokumen"} — BARUNA Viewer` },
+      { title: "Pratinjau Dokumen — BARUNA Viewer" },
       { name: "robots", content: "noindex,nofollow" },
     ],
   }),
@@ -43,6 +43,12 @@ function DocumentViewerPage() {
   const [zoom, setZoom] = useState(100);
   const [rotation, setRotation] = useState(0);
   const [isBlobLoading, setIsBlobLoading] = useState(false);
+
+  useEffect(() => {
+    if (name) {
+      document.title = `${name} — BARUNA Viewer`;
+    }
+  }, [name]);
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [officeEngine, setOfficeEngine] = useState<"google" | "office">("google");
 
@@ -53,6 +59,7 @@ function DocumentViewerPage() {
     let active = true;
     if (!url) return;
 
+    let createdBlobUrl: string | null = null;
     if (kind === "pdf" || kind === "image") {
       setIsBlobLoading(true);
       fetch(url)
@@ -62,6 +69,7 @@ function DocumentViewerPage() {
           if (!active) return;
           const typed = new Blob([raw], { type: mimeType });
           const obj = URL.createObjectURL(typed);
+          createdBlobUrl = obj;
           setBlobUrl(obj);
         })
         .catch(() => {
@@ -76,8 +84,8 @@ function DocumentViewerPage() {
 
     return () => {
       active = false;
-      if (blobUrl && blobUrl.startsWith("blob:")) {
-        URL.revokeObjectURL(blobUrl);
+      if (createdBlobUrl && createdBlobUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(createdBlobUrl);
       }
     };
   }, [url, kind, mimeType]);
@@ -229,32 +237,34 @@ function DocumentViewerPage() {
 
             {/* Office View */}
             {kind === "office" && (
-              <div className="w-full h-full flex flex-col">
-                <div className="bg-amber-950/50 border-b border-amber-800/40 px-5 py-2 flex items-center justify-between text-xs text-amber-200">
-                  <div className="flex items-center gap-2">
-                    <ShieldCheck className="h-4 w-4 text-amber-400" />
-                    <span>
-                      Pratinjau Office Document. Anda dapat membaca berkas ini secara langsung atau
-                      mengunduhnya jika ingin membuka di software desktop.
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setOfficeEngine(officeEngine === "google" ? "office" : "google")}
-                    className="text-amber-400 hover:underline cursor-pointer font-medium"
-                  >
-                    Ganti Mode Viewer ({officeEngine === "google" ? "Office Live" : "Google Docs"})
-                  </button>
+              <div className="p-10 text-center max-w-lg bg-slate-900 rounded-2xl border border-slate-800 shadow-2xl mx-auto my-auto">
+                <div className="h-16 w-16 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-400 flex items-center justify-center mx-auto mb-4">
+                  <Presentation className="h-8 w-8" />
                 </div>
-                <iframe
-                  src={
-                    officeEngine === "google"
-                      ? `https://docs.google.com/viewer?url=${encodeURIComponent(url)}&embedded=true`
-                      : `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(url)}`
-                  }
-                  title={name}
-                  className="w-full flex-1 border-0 bg-white"
-                />
+                <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/30 uppercase text-[10px] font-bold px-2.5 py-0.5 mb-2">
+                  Dokumen Microsoft Office
+                </Badge>
+                <h3 className="text-base font-bold text-white max-w-md mx-auto truncate" title={name}>
+                  {name}
+                </h3>
+                <p className="text-xs text-slate-400 mt-2 mb-6 leading-relaxed max-w-sm mx-auto">
+                  Berkas format Office ({mimeType.split("/").pop()}) paling optimal dibuka langsung menggunakan software desktop seperti Microsoft PowerPoint atau Word. Klik tombol di bawah untuk mengunduh berkas.
+                </p>
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                  <Button
+                    onClick={handleDownload}
+                    className="w-full sm:w-auto bg-marine hover:bg-marine/90 text-white font-semibold text-xs gap-2 h-9 px-4 shadow-sm"
+                  >
+                    <Download className="h-4 w-4" /> Unduh Dokumen Sekarang
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
+                    className="w-full sm:w-auto border-slate-700 hover:bg-slate-800 text-slate-200 text-xs gap-2 h-9 px-4"
+                  >
+                    <ExternalLink className="h-4 w-4" /> Buka Tautan Asli
+                  </Button>
+                </div>
               </div>
             )}
 

@@ -19,6 +19,7 @@ import {
   Paperclip,
   AlertCircle,
   Info,
+  BookOpenCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageShell } from "@/components/baruna/page/PageShell";
@@ -336,12 +337,18 @@ function PortalDashboard() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex flex-wrap items-center gap-2 shrink-0">
+                    <Link
+                      to="/experts/portal/portfolio"
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-700 px-3.5 py-2 text-xs font-semibold text-white shadow-xs hover:bg-emerald-800 transition"
+                    >
+                      <BookOpenCheck className="h-3.5 w-3.5" /> Buka Portofolio Mengajar
+                    </Link>
                     <Link
                       to="/academy"
-                      className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-700 px-4 py-2.5 text-xs font-semibold text-white shadow-xs hover:bg-emerald-800 transition"
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-300 bg-white px-3.5 py-2 text-xs font-semibold text-emerald-800 shadow-xs hover:bg-emerald-50 transition"
                     >
-                      <ExternalLink className="h-3.5 w-3.5" /> Lihat di Katalog Kursus
+                      <ExternalLink className="h-3.5 w-3.5" /> Katalog Kursus
                     </Link>
                   </div>
                 </div>
@@ -433,18 +440,29 @@ function PortalDashboard() {
 
         {/* Metric Cards */}
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard icon={FileEdit} label="Approved Modules" value={approvedModules} />
-          <StatCard icon={BookOpen} label="Published Courses" value={published} />
+          <StatCard
+            icon={FileEdit}
+            label="Modul Disetujui"
+            value={approvedModules}
+            sub="Terdaftar resmi di kurikulum"
+          />
+          <StatCard
+            icon={BookOpen}
+            label="Kursus Tayang"
+            value={published}
+            sub="Aktif di katalog publik"
+          />
           <StatCard
             icon={Users}
-            label="Successful Participants"
+            label="Peserta Terfasilitasi"
             value={formatUsp(trainer.uniqueSuccessfulParticipants)}
+            sub="Peserta lulus terverifikasi"
           />
           <StatCard
             icon={TrendingUp}
-            label="Learning Hours Generated"
+            label="Total Jam Belajar"
             value={formatUsp(learningHours)}
-            sub={`${instructionalHours} instructional hours`}
+            sub={`${instructionalHours} jam instruksional`}
           />
         </div>
 

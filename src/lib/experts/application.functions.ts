@@ -236,7 +236,7 @@ export const resubmitExpertApplicationRevision = createServerFn({ method: "POST"
         payload: input.payload,
         resubmitted_at: new Date().toISOString(),
         notes: input.notes || "Dokumen revisi dikirimkan ulang oleh calon expert.",
-      },
+      } as unknown as Json,
       content_hash: `rev-exp-${revNum}-${Date.now()}`,
     });
 

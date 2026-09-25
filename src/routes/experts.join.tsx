@@ -116,7 +116,9 @@ function JoinExpertPage() {
   const [subjectId, setSubjectId] = useState<string | null>(null);
   const [isRevision, setIsRevision] = useState(false);
   const [latestDecision, setLatestDecision] = useState<{
-    action: string;
+    id?: string;
+    decision?: string;
+    action?: string;
     rationale: string | null;
     createdAt: string;
   } | null>(null);

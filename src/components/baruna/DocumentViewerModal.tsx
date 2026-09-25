@@ -69,6 +69,7 @@ export function DocumentViewerModal({
     setRotation(0);
     setLoadError(null);
 
+    let createdObjectUrl: string | null = null;
     if (kind === "pdf" || kind === "image") {
       setIsBlobLoading(true);
       fetch(url)
@@ -79,6 +80,7 @@ export function DocumentViewerModal({
           // Re-wrap blob with strictly resolved mime type so Chrome/Edge displays it natively
           const typedBlob = new Blob([rawBlob], { type: mimeType });
           const objectUrl = URL.createObjectURL(typedBlob);
+          createdObjectUrl = objectUrl;
           setBlobUrl(objectUrl);
         })
         .catch((err) => {
@@ -98,8 +100,8 @@ export function DocumentViewerModal({
 
     return () => {
       active = false;
-      if (blobUrl && blobUrl.startsWith("blob:")) {
-        URL.revokeObjectURL(blobUrl);
+      if (createdObjectUrl && createdObjectUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(createdObjectUrl);
       }
     };
   }, [isOpen, url, kind, mimeType]);
@@ -109,8 +111,7 @@ export function DocumentViewerModal({
   };
 
   const handleOpenNewTab = () => {
-    const viewerUrl = `/document-viewer?url=${encodeURIComponent(url)}&name=${encodeURIComponent(name)}&category=${encodeURIComponent(category)}`;
-    window.open(viewerUrl, "_blank", "noopener,noreferrer");
+    window.open(url, "_blank", "noopener,noreferrer");
   };
 
   const activeUrl = blobUrl || url;
@@ -248,33 +249,34 @@ export function DocumentViewerModal({
 
               {/* Office Document Preview (Word, PowerPoint, Excel) */}
               {kind === "office" && (
-                <div className="w-full h-full flex flex-col">
-                  <div className="bg-amber-950/40 border-b border-amber-800/40 px-4 py-2 flex items-center justify-between text-xs text-amber-200">
-                    <span>
-                      Pratinjau dokumen Office (Word/PPTX) melalui viewer daring. Jika berkas tidak
-                      tampil, klik <strong>Unduh Berkas</strong>.
-                    </span>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setOfficeViewerType(officeViewerType === "google" ? "office" : "google")
-                        }
-                        className="text-amber-400 hover:underline cursor-pointer"
-                      >
-                        Ganti Engine ({officeViewerType === "google" ? "Microsoft" : "Google"})
-                      </button>
-                    </div>
+                <div className="p-8 text-center max-w-lg bg-slate-900 rounded-2xl border border-slate-800 shadow-2xl mx-auto my-auto">
+                  <div className="h-16 w-16 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-400 flex items-center justify-center mx-auto mb-4">
+                    <Presentation className="h-8 w-8" />
                   </div>
-                  <iframe
-                    src={
-                      officeViewerType === "google"
-                        ? `https://docs.google.com/viewer?url=${encodeURIComponent(url)}&embedded=true`
-                        : `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(url)}`
-                    }
-                    title={name}
-                    className="w-full flex-1 border-0 bg-white"
-                  />
+                  <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/30 uppercase text-[10px] font-bold px-2.5 py-0.5 mb-2">
+                    Dokumen Microsoft Office
+                  </Badge>
+                  <h3 className="text-base font-bold text-white max-w-md mx-auto truncate" title={name}>
+                    {name}
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-2 mb-6 leading-relaxed max-w-sm mx-auto">
+                    Berkas format Office ({mimeType.split("/").pop()}) paling optimal dibuka langsung menggunakan software desktop seperti Microsoft PowerPoint atau Word. Klik tombol di bawah untuk mengunduh dan memeriksa berkas.
+                  </p>
+                  <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                    <Button
+                      onClick={handleDownload}
+                      className="w-full sm:w-auto bg-marine hover:bg-marine/90 text-white font-semibold text-xs gap-2 h-9 px-4 shadow-sm"
+                    >
+                      <Download className="h-4 w-4" /> Unduh Dokumen Sekarang
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
+                      className="w-full sm:w-auto border-slate-700 hover:bg-slate-800 text-slate-200 text-xs gap-2 h-9 px-4"
+                    >
+                      <ExternalLink className="h-4 w-4" /> Buka Langsung di Tab
+                    </Button>
+                  </div>
                 </div>
               )}
 
